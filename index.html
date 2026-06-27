@@ -310,7 +310,7 @@ function openCF(driveId,cid){
   _cDid=driveId;_cCid=cid;
   const d=drives.find(x=>x.id===driveId);const c=cid?(d?.contents||[]).find(x=>x.id===cid):null;
   _cPhotos=(c?.photos||[]).map(id=>({id}));
-  openSheet(`<div class="shdr"><div class="stitle">${cid?'Edit item':'Add item'}</div><button class="ibtn" onclick="closeSheet()">&#10005;</button></div><div class="field"><div class="fl">File / folder name *</div><input id="cfn" type="text" placeholder="e.g. 2024_Commercial_ProjectA" value="${esc(c?.name||'')}"/></div><div class="frow"><div class="field"><div class="fl">Size</div><input id="cfs" type="text" placeholder="e.g. 850G, 1.2T" value="${esc(c?sizeToStr(c.sizeGB):'')}" /></div><div class="field"><div class="fl">Shoot date</div><input id="cfd" type="text" placeholder="e.g. 2024-03-15" value="${esc(c?.shootDate||'')}"/></div></div><div class="field"><div class="fl">Note</div><textarea id="cfno" placeholder="e.g. RAW + graded master">${esc(c?.note||'')}</textarea></div><div class="field"><div class="fl">Proof photos</div><div class="pegrid" id="pg"></div></div><button class="bprim" id="scb" onclick="saveContent()">&#10003; Save to Google Sheets</button>`);
+  openSheet(`<div class="shdr"><div class="stitle">${cid?'Edit item':'Add item'}</div><button class="ibtn" onclick="closeSheet()">&#10005;</button></div><div class="field"><div class="fl">File / folder name *</div><input id="cfn" type="text" placeholder="e.g. 2024_Commercial_ProjectA" value="${esc(c?.name||'')}"/></div><div class="frow"><div class="field"><div class="fl">Size</div><input id="cfs" type="text" placeholder="e.g. 850G, 1.2T" value="${esc(c?sizeToStr(c.sizeGB):'')}" /></div><div class="field"><div class="fl">Shoot date</div><input id="cfd" type="date" value="${esc(c?.shootDate||'')}"/></div></div><div class="field"><div class="fl">Note</div><textarea id="cfno" placeholder="e.g. RAW + graded master">${esc(c?.note||'')}</textarea></div><div class="field"><div class="fl">Proof photos <button onclick="analyseScreenshot()" id="aibtn" style="margin-left:8px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:var(--sans)">&#128247; Auto-fill from screenshot</button></div><div id="airesult" style="display:none;background:#E8F5EE;border:1px solid #B2D9C0;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;color:#1A4A2E"></div><div class="pegrid" id="pg"></div></div><button class="bprim" id="scb" onclick="saveContent()">&#10003; Save to Google Sheets</button>`);
   renderFP();
   Promise.all(_cPhotos.map(async p=>{if(!p.id||photoCache[p.id])return;try{const j=await gsGet({action:'readPhoto',id:p.id});if(j.data){photoCache[p.id]=j.data;const fp=_cPhotos.find(x=>x.id===p.id);if(fp)fp.url=j.data;}}catch{}})).then(renderFP);
   setTimeout(()=>document.getElementById('cfn')?.focus(),100);
@@ -354,6 +354,63 @@ function closeLB(){document.getElementById('lb').style.display='none';}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!isBusy)loadFromSheets();});
 window.addEventListener('focus',()=>{if(!isBusy)loadFromSheets();});
 loadFromSheets();
+
+async function analyseScreenshot(){
+  const btn=document.getElementById('aibtn');
+  const res=document.getElementById('airesult');
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';
+  inp.onchange=async()=>{
+    const file=inp.files[0];if(!file)return;
+    btn.textContent='Analysing\u2026';btn.disabled=true;
+    res.style.display='none';
+    try{
+      const dataUrl=await compress(file,1280,0.85);
+      const base64=dataUrl.split(',')[1];
+      // Send to Apps Script proxy — API key stays server-side, never in browser
+      const r=await fetch(GS+'?'+new URLSearchParams({
+        action:'analyseImage',
+        data:encodeURIComponent(base64)
+      }));
+      const j=await r.json();
+      if(j.error)throw new Error(j.error);
+      if(j.items&&j.items.length){
+        window._aiItems=j.items;
+        let h2='<strong>\u2713 Found '+j.items.length+' items \u2014 tap to fill:</strong>';
+        h2+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+        j.items.forEach((it,i)=>{
+          h2+=`<button onclick="fillFromAI(${i})" style="background:#fff;border:1px solid #B2D9C0;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#1A4A2E">${it.name}</button>`;
+        });
+        h2+='</div>';
+        res.innerHTML=h2;res.style.display='block';
+        res.style.background='#E8F5EE';res.style.borderColor='#B2D9C0';
+        _cPhotos.push({url:dataUrl});renderFP();
+      } else {
+        res.innerHTML='Could not detect folders. Try a clearer screenshot.';
+        res.style.display='block';res.style.background='#FFF0EB';res.style.borderColor='#F5C4B0';
+      }
+    }catch(e){
+      res.innerHTML='Analysis failed: '+e.message;
+      res.style.display='block';res.style.background='#FFF0EB';res.style.borderColor='#F5C4B0';
+    }finally{
+      btn.textContent='\u{1F4F7} Auto-fill from screenshot';btn.disabled=false;
+    }
+  };
+  inp.click();
+}
+function fillFromAI(i){
+  const it=window._aiItems[i];
+  if(!it)return;
+  document.getElementById('cfn').value=it.name||'';
+  if(it.date)document.getElementById('cfd').value=it.date;
+  if(it.size)document.getElementById('cfs').value=it.size;
+  // highlight filled fields briefly
+  ['cfn','cfd','cfs'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&el.value){el.style.borderColor='var(--good)';setTimeout(()=>el.style.borderColor='',1200);}
+  });
+}
+
 </script>
 </body>
 </html>
