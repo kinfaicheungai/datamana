@@ -155,7 +155,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.5 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.6 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -288,7 +288,7 @@ async function analyseImageDirect(base64,mimeType){
     },
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
-      max_tokens:1024,
+      max_tokens:8192,
       messages:[{role:'user',content:[
         {type:'image',source:{type:'base64',media_type:mimeType||'image/jpeg',data:base64}},
         {type:'text',text:promptText}
@@ -301,12 +301,21 @@ async function analyseImageDirect(base64,mimeType){
   }
   const data=await r.json();
   const text=data.content?.find(b=>b.type==='text')?.text||'';
-  try{return JSON.parse(text.replace(/```json?|```/g,'').trim());}
-  catch{
-    const m=text.match(/\{[\s\S]*\}/);
-    if(m)try{return JSON.parse(m[0]);}catch{}
-    throw new Error('Could not parse AI response. Try a clearer screenshot.');
+  const items=parseAIItems(text);
+  if(!items.length) throw new Error('No rows detected. Try a clearer screenshot.');
+  return {items};
+}
+function parseAIItems(raw){
+  let t=String(raw||'').replace(/```json?/gi,'').replace(/```/g,'').trim();
+  // 1) clean parse
+  try{const o=JSON.parse(t);if(o&&Array.isArray(o.items))return o.items;if(Array.isArray(o))return o;}catch{}
+  // 2) truncation-tolerant: grab every complete flat {...} object (our items have no nested braces)
+  const objs=[];
+  const re=/\{[^{}]*\}/g;let m;
+  while((m=re.exec(t))){
+    try{const o=JSON.parse(m[0]);if(o&&(o.name||o.fileName||o.folderName))objs.push(o);}catch{}
   }
+  return objs;
 }
 function gsJsonp(params,timeout=120000){
   return new Promise((resolve,reject)=>{
