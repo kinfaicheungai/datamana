@@ -86,16 +86,21 @@
   .ccell{flex:1;text-align:center;}
   .cv{font-family:var(--mono);font-weight:800;font-size:15px;}
   .cl{font-size:11px;color:var(--muted);margin-top:2px;}
-  .citem{background:var(--alt);border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-bottom:8px;}
-  .crow{display:flex;align-items:flex-start;gap:10px;}
-  .cinfo{flex:1;min-width:0;}
-  .cname{font-weight:600;font-size:15px;word-break:break-word;}
-  .cmeta{display:flex;gap:12px;flex-wrap:wrap;margin-top:3px;}
-  .cdate{font-family:var(--mono);font-size:12.5px;color:var(--accent);display:inline-flex;align-items:center;gap:4px;}
-  .csize{font-family:var(--mono);font-size:12.5px;color:var(--muted);}
-  .cnote{font-size:13px;color:var(--muted);margin-top:3px;}
-  .cacts{display:flex;gap:2px;flex-shrink:0;}
-  .pgrid{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;padding-left:27px;}
+  .clist{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .chead,.citem{display:grid;grid-template-columns:minmax(220px,1fr) 132px 78px 62px;align-items:center;gap:10px;}
+  .chead{padding:8px 10px;background:var(--alt);font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:800;}
+  .citem{background:var(--surface);border-top:1px solid var(--line);padding:8px 10px;min-height:42px;}
+  .citem:first-child{border-top:none;}
+  .cfile{min-width:0;display:flex;align-items:flex-start;gap:8px;}
+  .cico{width:18px;flex-shrink:0;line-height:1.2;margin-top:1px;}
+  .cinfo{min-width:0;}
+  .cname{font-weight:700;font-size:13.5px;line-height:1.25;word-break:break-word;}
+  .cnote{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.25;word-break:break-word;}
+  .cdate,.csize{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;}
+  .cdate{color:var(--accent);}
+  .cacts{display:flex;gap:2px;justify-content:flex-end;flex-shrink:0;}
+  .cacts .ibtn{padding:5px;}
+  .pgrid{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;padding-left:27px;grid-column:1/-1;}
   .pthumb{width:54px;height:54px;border-radius:8px;border:1px solid var(--line);overflow:hidden;background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .pthumb img{width:100%;height:100%;object-fit:cover;}
   .pegrid{display:flex;gap:8px;flex-wrap:wrap;}
@@ -127,6 +132,12 @@
   .aibtn{display:flex;align-items:center;gap:5px;cursor:pointer;border:none;background:var(--ink);color:#fff;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:600;font-family:var(--sans);}
   #toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:999px;font-size:14px;font-weight:600;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;}
   #toast.show{opacity:1;}
+  @media(max-width:520px){
+    .chead,.citem{grid-template-columns:minmax(145px,1fr) 96px 58px 48px;gap:6px;padding-left:8px;padding-right:8px;}
+    .cname{font-size:12.5px;}
+    .cdate,.csize{font-size:10.8px;}
+    .cnote{font-size:10.5px;}
+  }
   @media(max-width:420px){.hdr-title{font-size:22px;}.stat-v{font-size:18px;}}
 </style>
 </head>
@@ -135,7 +146,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.0 AI IMPORT</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.1 FINDER LIST</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -181,6 +192,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function parseGB(s,d='g'){if(!s&&s!==0)return 0;const m=String(s).match(/([\d.]+)\s*(tb|t|gb|g|mb|m)?/i);if(!m)return 0;const n=parseFloat(m[1]);if(isNaN(n))return 0;const u=(m[2]||d).toLowerCase();if(u.startsWith('t'))return n*1000;if(u.startsWith('g'))return n;return n/1000;}
 function fmtSize(g){if(!g)return '0 GB';return g>=1000?(Math.round(g/100)/10)+' TB':Math.round(g)+' GB';}
 function sizeToStr(g){if(!g)return '';return g>=1000?(Math.round(g/100)/10)+'T':Math.round(g)+'G';}
+function fmtDateOnly(v){if(!v)return '';const s=String(v);const m=s.match(/^(\d{4}-\d{2}-\d{2})/);return m?m[1]:s;}
 function dStats(d){const nom=parseGB(d.size,'t');const used=(d.contents||[]).reduce((s,c)=>s+(Number(c.sizeGB)||0),0);const usable=nom*USABLE;const free=Math.max(0,(usable-used)*SAFE);const pct=usable>0?Math.min(100,(used/usable)*100):0;return{nom,used,usable,free,pct,cap:nom>0};}
 function totTB(){return drives.reduce((s,d)=>s+parseGB(d.size,'t'),0)/1000;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -355,10 +367,12 @@ function openDetail(id){
   else cap=`<p style="font-size:12.5px;color:var(--muted);margin-bottom:18px">Enter a capacity and item sizes to track free space.</p>`;
   let items='';
   if(!cnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
-  else{items=cnt.map(c=>{
+  else{items='<div class="clist"><div class="chead"><div>Name</div><div>Date modified</div><div>Size</div><div></div></div>'+cnt.map(c=>{
     const ph=(c.photos||[]).map(pid=>{const u=photoCache[pid];return `<div class="pthumb" onclick="${u?`openLB('${pid}')`:'void(0)'}" style="cursor:${u?'pointer':'default'}">${u?`<img src="${esc(u)}" alt="proof"/>`:'&#128444;'}</div>`;}).join('');
-    return `<div class="citem"><div class="crow"><span style="margin-top:2px;flex-shrink:0">&#128193;</span><div class="cinfo"><div class="cname">${esc(c.name)}</div><div class="cmeta">${c.shootDate?`<span class="cdate">&#128197; ${esc(c.shootDate)}</span>`:''}${c.sizeGB>0?`<span class="csize">${fmtSize(Number(c.sizeGB))}</span>`:''}</div>${c.note?`<div class="cnote">${esc(c.note)}</div>`:''}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
-  }).join('');}
+    const size=c.size||((Number(c.sizeGB)||0)>0?fmtSize(Number(c.sizeGB)):'');
+    const kind=(c.note||'').replace(/^Kind:\s*/,'').split(' · ')[0];
+    return `<div class="citem"><div class="cfile"><span class="cico">&#128193;</span><div class="cinfo"><div class="cname">${esc(c.name)}</div>${kind?`<div class="cnote">${esc(kind)}</div>`:''}</div></div><div class="cdate">${esc(fmtDateOnly(c.shootDate))}</div><div class="csize">${esc(size)}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
+  }).join('')+'</div>';}
   openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${cnt.length} items</span></div>${cap}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div><div style="margin-top:10px">${items}</div>`);
 }
 
@@ -374,7 +388,7 @@ function selColor(el){document.querySelectorAll('.csw').forEach(s=>{s.classList.
 async function saveDrive(){
   const name=document.getElementById('fn')?.value?.trim();if(!name){alert('Please enter a drive name.');return;}
   const color=document.querySelector('.csw.a')?.dataset.h||'#3E7CB1';
-  const d={id:_eid||uid(),name,description:document.getElementById('fd')?.value||'',color,size:document.getElementById('fs')?.value||'',contents:_eid?(drives.find(x=>x.id===_eid)?.contents||[]):[]};
+  const d={id:_eid||uid(),name,description:document.getElementById('fd')?.value||'',color,size:document.getElementById('fs')?.value||''};
   const btn=document.getElementById('sdb');btn.disabled=true;btn.textContent='Saving\u2026';
   try{await gsPost({action:'writeDrive',data:d});closeSheet();await loadFromSheets();toast('Drive saved \u2713');}
   catch(e){alert('Save failed: '+e.message);btn.disabled=false;btn.textContent='\u2713 Save to Google Sheets';}
