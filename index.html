@@ -205,6 +205,25 @@ async function gsPost(b){
   if(!r.ok)throw new Error('Network error');
   const j=await r.json();if(j.error)throw new Error(j.error);return j;
 }
+async function gsImageAnalysis(base64,mimeType){
+  try{
+    const r=await fetch(GS,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'analyseImage',data:base64,mimeType})
+    });
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(j.error)throw new Error(j.error);
+    return j;
+  }catch(postErr){
+    const r=await fetch(GS+'?action=analyseImage&data='+encodeURIComponent(base64)+'&mimeType='+encodeURIComponent(mimeType||'image/jpeg'));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(j.error)throw new Error(j.error);
+    return j;
+  }
+}
 
 async function loadFromSheets(){
   setSP('syncing');
@@ -365,22 +384,19 @@ async function analyseScreenshot(){
     btn.textContent='Analysing\u2026'; btn.disabled=true;
     res.style.display='none';
     try{
-      // Compress aggressively so base64 fits in GET URL (~6000 chars max)
+      // POST handles larger payloads; keep compression to reduce API cost and latency.
       const dataUrl=await compress(file,600,0.5);
       const base64=dataUrl.split(',')[1];
       const encoded=encodeURIComponent(base64);
       if(encoded.length>7000){
-        // Still too big — try even smaller
+        // Keep a GET-sized fallback for older Apps Script deployments.
         const dataUrl2=await compress(file,400,0.4);
         const b2=dataUrl2.split(',')[1];
-        var finalB64=b2; var finalUrl=dataUrl;
+        var finalB64=b2; var finalUrl=dataUrl2;
       } else {
         var finalB64=base64; var finalUrl=dataUrl;
       }
-      const r=await fetch(GS+'?action=analyseImage&data='+encodeURIComponent(finalB64));
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const j=await r.json();
-      if(j.error)throw new Error(j.error);
+      const j=await gsImageAnalysis(finalB64,'image/jpeg');
       if(j.items&&j.items.length){
         window._aiItems=j.items;
         let h2='<strong>\u2713 Found '+j.items.length+' items \u2014 tap to fill:</strong>';
