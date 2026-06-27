@@ -173,7 +173,7 @@
   <img id="lbi" src="" alt="proof"/>
 </div>
 <script>
-const GS='https://script.google.com/macros/s/AKfycbwHUVs9KkJOVTTWNNQR5sOi9oSwX-hxlHwQbFDJqBDqUx1n9tVSInz5BcgVlys304ausg/exec';
+const GS='https://script.google.com/macros/s/AKfycbwJpn_i2LiX_o65w4Ex7w9bC9xWOQN09xnY-Le8INtXwgYF_dBhbNVsmxG7IDuqtek6KA/exec';
 const USABLE=0.92,SAFE=0.92;
 const SPINE=[{n:'Red',h:'#CC4B4B'},{n:'Orange',h:'#DE8A2C'},{n:'Yellow',h:'#D8B53F'},{n:'Green',h:'#4F9D69'},{n:'Teal',h:'#3FA1A1'},{n:'Blue',h:'#3E7CB1'},{n:'Purple',h:'#7C5AA6'},{n:'Gray',h:'#8C8A80'},{n:'Black',h:'#2C2C28'}];
 let drives=[],photoCache={},isBusy=false;
@@ -196,7 +196,15 @@ function setSP(st,ts){
 
 // API
 async function gsGet(p){const r=await fetch(GS+'?'+new URLSearchParams(p));if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
-async function gsPost(b){const r=await fetch(GS,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'application/json'},redirect:'follow'});if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
+async function gsPost(b){
+  const p={action:b.action};
+  if(b.id) p.id=b.id;
+  if(b.data) p.data=encodeURIComponent(JSON.stringify(b.data));
+  if(b.id&&b.data&&b.action==='writePhoto') p.data=encodeURIComponent(b.data);
+  const r=await fetch(GS+'?'+new URLSearchParams(p));
+  if(!r.ok)throw new Error('Network error');
+  const j=await r.json();if(j.error)throw new Error(j.error);return j;
+}
 
 async function loadFromSheets(){
   setSP('syncing');
