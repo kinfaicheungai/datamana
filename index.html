@@ -205,6 +205,50 @@ async function gsPost(b){
   if(!r.ok)throw new Error('Network error');
   const j=await r.json();if(j.error)throw new Error(j.error);return j;
 }
+const DV_ANTHROPIC_KEY='drivevault_anthropic_key';
+function getDriveVaultAnthropicKey(){
+  let key=localStorage.getItem(DV_ANTHROPIC_KEY)||'';
+  if(key)return key;
+  key=prompt('Enter your Anthropic API key. It will be saved only in this browser.');
+  if(!key)throw new Error('Anthropic API key is required for screenshot analysis.');
+  key=key.trim();
+  if(!key.startsWith('sk-ant-'))throw new Error('Anthropic API key should start with sk-ant-');
+  localStorage.setItem(DV_ANTHROPIC_KEY,key);
+  return key;
+}
+async function analyseImageDirect(base64,mimeType){
+  const key=getDriveVaultAnthropicKey();
+  const promptText='This is a Mac Finder screenshot showing a hard drive folder listing. Extract: 1) All folder/file names, 2) Dates from Date Modified column, 3) File sizes if visible. Return ONLY valid JSON, no markdown, no explanation: {"items":[{"name":"FolderName","date":"YYYY-MM-DD","size":""}]}. Convert dates like "22 Jun 2026" to "2026-06-22". If size missing use empty string.';
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:1024,
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mimeType||'image/jpeg',data:base64}},
+        {type:'text',text:promptText}
+      ]}]
+    })
+  });
+  if(!r.ok){
+    const e=await r.json().catch(()=>({}));
+    throw new Error(e?.error?.message||('Anthropic API error '+r.status));
+  }
+  const data=await r.json();
+  const text=data.content?.find(b=>b.type==='text')?.text||'';
+  try{return JSON.parse(text.replace(/```json?|```/g,'').trim());}
+  catch{
+    const m=text.match(/\{[\s\S]*\}/);
+    if(m)try{return JSON.parse(m[0]);}catch{}
+    throw new Error('Could not parse AI response. Try a clearer screenshot.');
+  }
+}
 function gsJsonp(params,timeout=120000){
   return new Promise((resolve,reject)=>{
     const cb='dv_cb_'+uid();
@@ -224,23 +268,7 @@ function gsJsonp(params,timeout=120000){
   });
 }
 async function gsImageAnalysis(base64,mimeType){
-  const uploadId=uid();
-  const chunkSize=1500;
-  const total=Math.ceil(base64.length/chunkSize);
-  for(let i=0;i<total;i++){
-    const j=await gsJsonp({
-      action:'uploadImageChunk',
-      id:uploadId,
-      index:i,
-      total,
-      mimeType:mimeType||'image/jpeg',
-      data:base64.slice(i*chunkSize,(i+1)*chunkSize)
-    },30000);
-    if(j.error)throw new Error(j.error);
-  }
-  const result=await gsJsonp({action:'analyseUploadedImage',id:uploadId},120000);
-  if(result.error)throw new Error(result.error);
-  return result;
+  return analyseImageDirect(base64,mimeType);
 }
 
 async function loadFromSheets(){
