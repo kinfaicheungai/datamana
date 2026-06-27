@@ -205,24 +205,42 @@ async function gsPost(b){
   if(!r.ok)throw new Error('Network error');
   const j=await r.json();if(j.error)throw new Error(j.error);return j;
 }
+function gsJsonp(params,timeout=120000){
+  return new Promise((resolve,reject)=>{
+    const cb='dv_cb_'+uid();
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>cleanup(new Error('Google Apps Script timed out')),timeout);
+    function cleanup(err,data){
+      clearTimeout(timer);
+      delete window[cb];
+      script.remove();
+      err?reject(err):resolve(data);
+    }
+    window[cb]=data=>cleanup(null,data);
+    script.onerror=()=>cleanup(new Error('Google Apps Script did not respond'));
+    params.callback=cb;
+    script.src=GS+'?'+new URLSearchParams(params);
+    document.head.appendChild(script);
+  });
+}
 async function gsImageAnalysis(base64,mimeType){
-  try{
-    const r=await fetch(GS,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'analyseImage',data:base64,mimeType})
-    });
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();
+  const uploadId=uid();
+  const chunkSize=1500;
+  const total=Math.ceil(base64.length/chunkSize);
+  for(let i=0;i<total;i++){
+    const j=await gsJsonp({
+      action:'uploadImageChunk',
+      id:uploadId,
+      index:i,
+      total,
+      mimeType:mimeType||'image/jpeg',
+      data:base64.slice(i*chunkSize,(i+1)*chunkSize)
+    },30000);
     if(j.error)throw new Error(j.error);
-    return j;
-  }catch(postErr){
-    const r=await fetch(GS+'?action=analyseImage&data='+encodeURIComponent(base64)+'&mimeType='+encodeURIComponent(mimeType||'image/jpeg'));
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    if(j.error)throw new Error(j.error);
-    return j;
   }
+  const result=await gsJsonp({action:'analyseUploadedImage',id:uploadId},120000);
+  if(result.error)throw new Error(result.error);
+  return result;
 }
 
 async function loadFromSheets(){
