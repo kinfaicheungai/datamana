@@ -135,7 +135,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v1.4</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v1.6</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -173,7 +173,7 @@
   <img id="lbi" src="" alt="proof"/>
 </div>
 <script>
-const GS='https://script.google.com/macros/s/AKfycbzCVkeUmq0186AF4i6Z7jiRer8El88jCCOt12OKmST-r0yHJvv3YFZ4_7iz4l4Y6Q9-OQ/exec';
+const GS='https://script.google.com/macros/s/AKfycbxsqzjLXQ0mb0_M6tC15pu_d1l3LA9qKr686cS7K-OjXyqZtN5raMpHR0eyuO-EpjGqPg/exec';
 const USABLE=0.92,SAFE=0.92;
 const SPINE=[{n:'Red',h:'#CC4B4B'},{n:'Orange',h:'#DE8A2C'},{n:'Yellow',h:'#D8B53F'},{n:'Green',h:'#4F9D69'},{n:'Teal',h:'#3FA1A1'},{n:'Blue',h:'#3E7CB1'},{n:'Purple',h:'#7C5AA6'},{n:'Gray',h:'#8C8A80'},{n:'Black',h:'#2C2C28'}];
 let drives=[],photoCache={},isBusy=false;
@@ -359,19 +359,21 @@ async function analyseScreenshot(){
   const btn=document.getElementById('aibtn');
   const res=document.getElementById('airesult');
   const inp=document.createElement('input');
-  inp.type='file';inp.accept='image/*';
+  inp.type='file'; inp.accept='image/*';
   inp.onchange=async()=>{
-    const file=inp.files[0];if(!file)return;
-    btn.textContent='Analysing\u2026';btn.disabled=true;
+    const file=inp.files[0]; if(!file)return;
+    btn.textContent='Analysing\u2026'; btn.disabled=true;
     res.style.display='none';
     try{
-      const dataUrl=await compress(file,1280,0.85);
+      const dataUrl=await compress(file,1024,0.8);
       const base64=dataUrl.split(',')[1];
-      // Send to Apps Script proxy — API key stays server-side, never in browser
-      const r=await fetch(GS+'?'+new URLSearchParams({
-        action:'analyseImage',
-        data:encodeURIComponent(base64)
-      }));
+      // Use POST to avoid URL length limits on image data
+      const r=await fetch(GS,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        redirect:'follow',
+        body:JSON.stringify({action:'analyseImage', data:base64})
+      });
       const j=await r.json();
       if(j.error)throw new Error(j.error);
       if(j.items&&j.items.length){
@@ -382,18 +384,18 @@ async function analyseScreenshot(){
           h2+=`<button onclick="fillFromAI(${i})" style="background:#fff;border:1px solid #B2D9C0;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#1A4A2E">${it.name}</button>`;
         });
         h2+='</div>';
-        res.innerHTML=h2;res.style.display='block';
-        res.style.background='#E8F5EE';res.style.borderColor='#B2D9C0';
-        _cPhotos.push({url:dataUrl});renderFP();
+        res.innerHTML=h2; res.style.display='block';
+        res.style.background='#E8F5EE'; res.style.borderColor='#B2D9C0';
+        _cPhotos.push({url:dataUrl}); renderFP();
       } else {
         res.innerHTML='Could not detect folders. Try a clearer screenshot.';
-        res.style.display='block';res.style.background='#FFF0EB';res.style.borderColor='#F5C4B0';
+        res.style.display='block'; res.style.background='#FFF0EB'; res.style.borderColor='#F5C4B0';
       }
     }catch(e){
       res.innerHTML='Analysis failed: '+e.message;
-      res.style.display='block';res.style.background='#FFF0EB';res.style.borderColor='#F5C4B0';
+      res.style.display='block'; res.style.background='#FFF0EB'; res.style.borderColor='#F5C4B0';
     }finally{
-      btn.textContent='\u{1F4F7} Auto-fill from screenshot';btn.disabled=false;
+      btn.textContent='\u{1F4F7} Auto-fill from screenshot'; btn.disabled=false;
     }
   };
   inp.click();
