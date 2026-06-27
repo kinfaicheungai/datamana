@@ -156,7 +156,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.8 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.9 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -226,7 +226,21 @@ function makeImportNote(it){
     it.parentPath?('Parent: '+it.parentPath):''
   ].filter(Boolean).join(' · ');
 }
-function dStats(d){const nom=parseGB(d.size,'t');const used=(d.contents||[]).reduce((s,c)=>s+(Number(c.sizeGB)||0),0);const usable=nom*USABLE;const free=Math.max(0,(usable-used)*SAFE);const pct=usable>0?Math.min(100,(used/usable)*100):0;return{nom,used,usable,free,pct,cap:nom>0};}
+function dStats(d){
+  const nom=parseGB(d.size,'t');
+  // Only sum TOP-LEVEL (level 0) items — folder sizes already include their children,
+  // so summing nested rows too would double-count.
+  const cs=(d.contents||[]);
+  const hasMeta=cs.some(c=>{const m=parseNoteMeta(c.note);return Number.isFinite(m.level);});
+  const used=cs.reduce((s,c)=>{
+    const lv=hasMeta?(Number.isFinite(parseNoteMeta(c.note).level)?parseNoteMeta(c.note).level:0):0;
+    return lv===0?s+(Number(c.sizeGB)||0):s;
+  },0);
+  const usable=nom*USABLE;
+  const free=Math.max(0,(usable-used)*SAFE);
+  const pct=usable>0?Math.min(100,(used/usable)*100):0;
+  return{nom,used,usable,free,pct,cap:nom>0};
+}
 function totTB(){return drives.reduce((s,d)=>s+parseGB(d.size,'t'),0)/1000;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function jsArg(s){return JSON.stringify(String(s||'')).replace(/</g,'\\u003c');}
