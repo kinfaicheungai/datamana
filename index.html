@@ -155,7 +155,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.6 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.7 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -411,14 +411,14 @@ function toggleFolder(path){
 }
 function contentNode(c){
   const meta=parseNoteMeta(c.note);
-  const path=String(c.name||'').trim();
-  const parts=path.split('/').map(p=>p.trim()).filter(Boolean);
-  const fallbackLevel=Math.max(0,parts.length-1);
-  const level=Number.isFinite(meta.level)?meta.level:fallbackLevel;
-  const name=meta.row||parts[parts.length-1]||path;
-  const parentPath=meta.parentPath||parts.slice(0,-1).join(' / ');
+  const raw=String(c.name||'').trim();
+  const segs=raw.split('/').map(p=>p.trim()).filter(Boolean);
+  const name=meta.row||segs[segs.length-1]||raw;
+  let parentPath=(meta.parentPath!=null?String(meta.parentPath):segs.slice(0,-1).join(' / ')).trim();
+  const fullPath=parentPath?(parentPath+' / '+name):name;
+  const level=Number.isFinite(meta.level)?meta.level:(parentPath?parentPath.split('/').filter(Boolean).length:Math.max(0,segs.length-1));
   const kind=meta.kind||'';
-  return{c,path,name,parentPath,level,kind};
+  return{c,name,parentPath,fullPath,level,kind};
 }
 function openDetail(id){
   _did=id;const d=drives.find(x=>x.id===id);if(!d)return;
@@ -431,12 +431,14 @@ function openDetail(id){
   if(!cnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
   else{
     const nodes=cnt.map(contentNode);
-    const hasChildren=path=>nodes.some(n=>n.parentPath===path);
+    const byPath={}; nodes.forEach(n=>{byPath[n.fullPath]=n;});
+    const hasChildren=fp=>nodes.some(n=>n.parentPath===fp);
     const isHidden=n=>{
-      const parts=n.path.split('/').map(p=>p.trim()).filter(Boolean);
-      for(let i=1;i<parts.length;i++){
-        const p=parts.slice(0,i).join(' / ');
+      let p=n.parentPath; const seen={};
+      while(p&&!seen[p]){
+        seen[p]=1;
         if(_collapsedFolders.has(folderKey(d.id,p)))return true;
+        const pn=byPath[p]; p=pn?pn.parentPath:'';
       }
       return false;
     };
@@ -444,9 +446,10 @@ function openDetail(id){
     const c=n.c;
     const ph=(c.photos||[]).map(pid=>{const u=photoCache[pid];return `<div class="pthumb" onclick="${u?`openLB('${pid}')`:'void(0)'}" style="cursor:${u?'pointer':'default'}">${u?`<img src="${esc(u)}" alt="proof"/>`:'&#128444;'}</div>`;}).join('');
     const size=c.size||((Number(c.sizeGB)||0)>0?fmtSize(Number(c.sizeGB)):'');
-    const isFolder=/folder/i.test(n.kind)||hasChildren(n.path);
-    const collapsed=_collapsedFolders.has(folderKey(d.id,n.path));
-    const twist=hasChildren(n.path)?`<button class="ctwist" onclick="event.stopPropagation();toggleFolder(${jsArg(n.path)})" title="${collapsed?'Expand':'Collapse'}">${collapsed?'&#9656;':'&#9662;'}</button>`:'<span class="ctwist blank">&#9656;</span>';
+    const kids=hasChildren(n.fullPath);
+    const isFolder=/folder/i.test(n.kind)||kids;
+    const collapsed=_collapsedFolders.has(folderKey(d.id,n.fullPath));
+    const twist=kids?`<button class="ctwist" onclick="event.stopPropagation();toggleFolder(${jsArg(n.fullPath)})" title="${collapsed?'Expand':'Collapse'}">${collapsed?'&#9656;':'&#9662;'}</button>`:'<span class="ctwist blank">&#9656;</span>';
     const indent=Math.min(84,n.level*22);
     return `<div class="citem"><div class="cfile" style="padding-left:${indent}px">${twist}<span class="cico${isFolder?' folder':''}">${isFolder?'&#128193;':'&#128196;'}</span><div class="cinfo"><div class="cname">${esc(n.name)}</div>${n.kind?`<div class="cnote">${esc(n.kind)}</div>`:''}</div></div><div class="cdate">${esc(fmtDateOnly(c.shootDate))}</div><div class="csize">${esc(size)}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
   }).join('')+'</div>';}
