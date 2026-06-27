@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Drive Vault · ND Data Management</title>
+<style>
+  :root {
+    --page:#E7E6DF;--surface:#FCFBF8;--alt:#F1EFE8;
+    --ink:#1A1A17;--muted:#75736A;--line:#DDDBD1;
+    --accent:#C24A1E;--good:#3F8A57;--warn:#B4541C;--gs:#1A7340;
+    --sans:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --r:14px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--page);color:var(--ink);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .spin{animation:spin 1s linear infinite;display:inline-block;}
+  @media(prefers-reduced-motion:reduce){.spin{animation:none;}}
+  #app{max-width:640px;margin:0 auto;padding:0 16px 120px;}
+  .hdr{padding-top:22px;padding-bottom:14px;}
+  .hdr-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--accent);font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;letter-spacing:-0.5px;margin-top:2px;}
+  .gs-badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:#E8F5EE;border:1px solid #B2D9C0;border-radius:999px;padding:5px 12px;font-size:12px;color:var(--gs);font-weight:600;}
+  .stats{display:flex;gap:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px;margin-top:12px;}
+  .stat{flex:1;text-align:center;}
+  .stat-v{font-family:var(--mono);font-size:22px;font-weight:800;line-height:1;}
+  .stat-s{font-size:12px;color:var(--muted);margin-left:3px;}
+  .stat-l{font-size:11px;color:var(--muted);margin-top:4px;}
+  .sdiv{width:1px;background:var(--line);}
+  .sbox{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px;}
+  .sbox input{flex:1;border:none;outline:none;background:transparent;font-size:15px;color:var(--ink);font-family:var(--sans);}
+  .sbox input::placeholder{color:var(--muted);}
+  .ibtn{background:transparent;border:none;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+  .ibtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .spill{display:flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 10px;font-size:11.5px;font-weight:600;font-family:var(--mono);white-space:nowrap;flex-shrink:0;}
+  .dcard{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;width:100%;text-align:left;transition:transform .12s,box-shadow .12s;margin-bottom:10px;}
+  @media(hover:hover){.dcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.07);}}
+  .dcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .dspine{width:8px;flex-shrink:0;}
+  .dbody{flex:1;padding:13px 14px;min-width:0;}
+  .dtop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+  .dname{font-weight:700;font-size:16.5px;letter-spacing:-0.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dsbadge{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--accent);background:#F6E7DF;border-radius:7px;padding:2px 8px;flex-shrink:0;}
+  .ddesc{font-size:13px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dmeta{display:flex;gap:14px;margin-top:8px;font-size:12px;color:var(--muted);font-family:var(--mono);flex-wrap:wrap;align-items:center;}
+  .dmeta .good{color:var(--good);}
+  .ubar{height:4px;border-radius:4px;background:var(--alt);margin-top:9px;overflow:hidden;}
+  .ufill{height:100%;border-radius:4px;background:var(--accent);}
+  .ufill.w{background:var(--warn);}
+  #fab{position:fixed;right:max(18px,calc(50vw - 320px + 18px));bottom:calc(24px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;border:none;cursor:pointer;background:var(--accent);color:#fff;box-shadow:0 8px 24px rgba(194,74,30,.4);display:flex;align-items:center;justify-content:center;font-size:28px;z-index:10;}
+  .ov{position:fixed;inset:0;background:rgba(20,20,16,.42);z-index:50;display:flex;align-items:flex-end;justify-content:center;}
+  .sheet{background:var(--page);width:100%;max-width:640px;max-height:90vh;overflow-y:auto;border-top-left-radius:22px;border-top-right-radius:22px;padding:18px 16px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.25);}
+  .shandle{width:38px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 14px;}
+  .shdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .stitle{font-weight:800;font-size:19px;letter-spacing:-0.3px;}
+  .field{margin-bottom:14px;}
+  .fl{font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:6px;letter-spacing:.2px;}
+  .field input,.field textarea{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:11px 12px;font-size:15px;color:var(--ink);outline:none;font-family:var(--sans);}
+  .field input:focus,.field textarea:focus{border-color:var(--accent);}
+  .field textarea{min-height:64px;resize:vertical;}
+  .frow{display:flex;gap:12px;}
+  .frow .field{flex:1;}
+  .cgrid{display:flex;gap:9px;flex-wrap:wrap;}
+  .csw{width:30px;height:30px;border-radius:8px;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .csw.a{border:3px solid var(--ink);}
+  .bprim{display:flex;align-items:center;justify-content:center;gap:7px;border:none;background:var(--accent);color:#fff;border-radius:12px;padding:13px 16px;font-size:15px;font-weight:700;cursor:pointer;width:100%;font-family:var(--sans);}
+  .bprim:disabled{opacity:.45;cursor:not-allowed;}
+  .bprim.bw{background:var(--warn);}
+  .bghost{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:13px 16px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  .bpair{display:flex;gap:10px;}
+  .bpair>*{flex:1;}
+  .tag{background:var(--alt);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px;display:inline-block;}
+  .trow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .slbl{font-family:var(--mono);font-size:11.5px;letter-spacing:1.5px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:9px;}
+  .cpanel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px;margin-bottom:18px;}
+  .ctop{display:flex;justify-content:space-between;align-items:baseline;}
+  .cbar{height:10px;border-radius:6px;background:var(--alt);margin-top:10px;overflow:hidden;}
+  .cfill{height:100%;border-radius:6px;background:var(--accent);}
+  .cfill.w{background:var(--warn);}
+  .ccells{display:flex;margin-top:10px;}
+  .ccell{flex:1;text-align:center;}
+  .cv{font-family:var(--mono);font-weight:800;font-size:15px;}
+  .cl{font-size:11px;color:var(--muted);margin-top:2px;}
+  .citem{background:var(--alt);border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-bottom:8px;}
+  .crow{display:flex;align-items:flex-start;gap:10px;}
+  .cinfo{flex:1;min-width:0;}
+  .cname{font-weight:600;font-size:15px;word-break:break-word;}
+  .cmeta{display:flex;gap:12px;flex-wrap:wrap;margin-top:3px;}
+  .cdate{font-family:var(--mono);font-size:12.5px;color:var(--accent);display:inline-flex;align-items:center;gap:4px;}
+  .csize{font-family:var(--mono);font-size:12.5px;color:var(--muted);}
+  .cnote{font-size:13px;color:var(--muted);margin-top:3px;}
+  .cacts{display:flex;gap:2px;flex-shrink:0;}
+  .pgrid{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;padding-left:27px;}
+  .pthumb{width:54px;height:54px;border-radius:8px;border:1px solid var(--line);overflow:hidden;background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .pthumb img{width:100%;height:100%;object-fit:cover;}
+  .pegrid{display:flex;gap:8px;flex-wrap:wrap;}
+  .pei{position:relative;width:70px;height:70px;}
+  .pein{width:100%;height:100%;border-radius:9px;border:1px solid var(--line);overflow:hidden;background:var(--alt);display:flex;align-items:center;justify-content:center;font-size:22px;}
+  .pein img{width:100%;height:100%;object-fit:cover;}
+  .pdel{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:11px;border:none;background:var(--warn);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .padd{width:70px;height:70px;border-radius:9px;border:1px dashed var(--line);background:var(--surface);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:11px;}
+  .rcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:10px;}
+  .rtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+  .rname{font-weight:700;font-size:16px;word-break:break-word;}
+  .bbadge{text-align:center;flex-shrink:0;border-radius:10px;padding:6px 11px;}
+  .bbx{font-family:var(--mono);font-weight:800;font-size:18px;line-height:1;}
+  .bbl{font-size:10px;margin-top:3px;font-weight:600;}
+  .dchips{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px;align-items:center;}
+  .dchip{display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:var(--alt);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:13px;color:var(--ink);}
+  .cdot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+  .empty{text-align:center;padding:54px 20px;border:1px dashed var(--line);border-radius:16px;background:var(--surface);}
+  .ei{font-size:28px;margin-bottom:10px;}
+  .et{font-weight:700;font-size:16px;}
+  .eh{color:var(--muted);font-size:13.5px;margin-top:6px;}
+  #lb{position:fixed;inset:0;background:rgba(10,10,8,.9);z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;}
+  #lb img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain;}
+  #lbc{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;}
+  .dhdr{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .ddot{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
+  .dn{font-weight:800;font-size:20px;flex:1;letter-spacing:-0.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .chrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .aibtn{display:flex;align-items:center;gap:5px;cursor:pointer;border:none;background:var(--ink);color:#fff;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:600;font-family:var(--sans);}
+  #toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:999px;font-size:14px;font-weight:600;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;}
+  #toast.show{opacity:1;}
+  @media(max-width:420px){.hdr-title{font-size:22px;}.stat-v{font-size:18px;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="hdr">
+    <div class="hdr-row">
+      <div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT</div>
+        <div class="hdr-title">Hard Drive Catalog</div>
+      </div>
+      <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
+        <span id="sIcon">&#9729;</span>
+        <span id="sText">Loading&hellip;</span>
+        <span id="sSpin" style="display:none" class="spin">&#8635;</span>
+      </button>
+    </div>
+    <div class="gs-badge">&#128202; Synced to Google Sheets &middot; ND_Data_Management</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-v" id="sDrives">&mdash;</div><div class="stat-l">Drives</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="stat-v" id="sCap">&mdash;<span class="stat-s">TB</span></div><div class="stat-l">Total capacity</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="stat-v" id="sItems">&mdash;</div><div class="stat-l">Items logged</div></div>
+    </div>
+  </header>
+  <div class="sbox">
+    <span style="color:var(--muted);font-size:17px">&#9906;</span>
+    <input type="text" id="sInput" placeholder="Search project, folder, shoot date, drive&hellip;" oninput="renderMain()"/>
+    <button class="ibtn" id="sClear" onclick="clearSearch()" style="display:none">&#10005;</button>
+  </div>
+  <div id="main"></div>
+</div>
+<button id="fab" onclick="openDriveForm(null)" aria-label="Add drive">&#＋;</button>
+<div id="toast">Saved</div>
+<div id="ov" class="ov" style="display:none" onclick="ovClick(event)">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="shandle"></div>
+    <div id="sc"></div>
+  </div>
+</div>
+<div id="lb" style="display:none" onclick="closeLB()">
+  <button id="lbc" onclick="closeLB()">&#10005;</button>
+  <img id="lbi" src="" alt="proof"/>
+</div>
+<script>
+const GS='https://script.google.com/macros/s/AKfycbwJpn_i2LiX_o65w4Ex7w9bC9xWOQN09xnY-Le8INtXwgYF_dBhbNVsmxG7IDuqtek6KA/exec';
+const USABLE=0.92,SAFE=0.92;
+const SPINE=[{n:'Red',h:'#CC4B4B'},{n:'Orange',h:'#DE8A2C'},{n:'Yellow',h:'#D8B53F'},{n:'Green',h:'#4F9D69'},{n:'Teal',h:'#3FA1A1'},{n:'Blue',h:'#3E7CB1'},{n:'Purple',h:'#7C5AA6'},{n:'Gray',h:'#8C8A80'},{n:'Black',h:'#2C2C28'}];
+let drives=[],photoCache={},isBusy=false;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function parseGB(s,d='g'){if(!s&&s!==0)return 0;const m=String(s).match(/([\d.]+)\s*(tb|t|gb|g|mb|m)?/i);if(!m)return 0;const n=parseFloat(m[1]);if(isNaN(n))return 0;const u=(m[2]||d).toLowerCase();if(u.startsWith('t'))return n*1000;if(u.startsWith('g'))return n;return n/1000;}
+function fmtSize(g){if(!g)return '0 GB';return g>=1000?(Math.round(g/100)/10)+' TB':Math.round(g)+' GB';}
+function sizeToStr(g){if(!g)return '';return g>=1000?(Math.round(g/100)/10)+'T':Math.round(g)+'G';}
+function dStats(d){const nom=parseGB(d.size,'t');const used=(d.contents||[]).reduce((s,c)=>s+(Number(c.sizeGB)||0),0);const usable=nom*USABLE;const free=Math.max(0,(usable-used)*SAFE);const pct=usable>0?Math.min(100,(used/usable)*100):0;return{nom,used,usable,free,pct,cap:nom>0};}
+function totTB(){return drives.reduce((s,d)=>s+parseGB(d.size,'t'),0)/1000;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(m='Saved to Google Sheets'){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+// Sync pill
+function setSP(st,ts){
+  const p=document.getElementById('syncPill'),i=document.getElementById('sIcon'),t=document.getElementById('sText'),sp=document.getElementById('sSpin');
+  if(st==='syncing'){p.style.color='var(--muted)';t.textContent='Syncing';i.style.display='none';sp.style.display='inline-block';}
+  else if(st==='synced'){p.style.color='var(--good)';i.innerHTML='&#9729;';i.style.display='inline';sp.style.display='none';t.textContent=ts?'Synced '+ts.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'Synced';}
+  else{p.style.color='var(--warn)';i.innerHTML='&#9888;';i.style.display='inline';sp.style.display='none';t.textContent='Sync failed';}
+}
+
+// API
+async function gsGet(p){const r=await fetch(GS+'?'+new URLSearchParams(p));if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
+async function gsPost(b){const r=await fetch(GS,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'application/json'},redirect:'follow'});if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
+
+async function loadFromSheets(){
+  setSP('syncing');
+  try{const data=await gsGet({action:'readAll'});drives=Array.isArray(data)?data:[];setSP('synced',new Date());updateStats();renderMain();loadPhotos(drives.flatMap(d=>(d.contents||[]).flatMap(c=>c.photos||[])));}
+  catch(e){setSP('error');console.error(e);}
+}
+async function loadPhotos(ids){
+  const miss=ids.filter(id=>id&&!(id in photoCache));
+  await Promise.all(miss.map(async id=>{try{const j=await gsGet({action:'readPhoto',id});if(j.data)photoCache[id]=j.data;}catch{}}));
+  renderMain();
+}
+
+function updateStats(){
+  document.getElementById('sDrives').textContent=drives.length;
+  const tb=Math.round(totTB()*10)/10;
+  document.getElementById('sCap').innerHTML=tb+'<span class="stat-s">TB</span>';
+  document.getElementById('sItems').textContent=drives.reduce((s,d)=>s+(d.contents?.length||0),0);
+}
+
+// Render
+function renderMain(){
+  const q=document.getElementById('sInput').value.trim().toLowerCase();
+  document.getElementById('sClear').style.display=q?'flex':'none';
+  const m=document.getElementById('main');
+  if(q){m.innerHTML=buildSearch(q);return;}
+  if(!drives.length){m.innerHTML='<div class="empty"><div class="ei">&#128190;</div><div class="et">No drives yet</div><div class="eh">Tap + to add your first drive.</div></div>';return;}
+  m.innerHTML=drives.map(d=>buildCard(d)).join('');
+}
+function clearSearch(){document.getElementById('sInput').value='';document.getElementById('sClear').style.display='none';renderMain();}
+
+function buildCard(d){
+  const st=dStats(d);const cnt=(d.contents||[]).length;
+  const ls=(d.contents||[]).map(c=>c.shootDate).filter(Boolean).sort().slice(-1)[0];
+  const bar=st.cap&&st.used>0?`<div class="ubar"><div class="ufill${st.pct>88?' w':''}" style="width:${st.pct}%"></div></div>`:'';
+  const free=st.cap&&st.used>0?`<span class="good">~${fmtSize(st.free)} free</span>`:'';
+  return `<button class="dcard" onclick="openDetail('${esc(d.id)}')"><div class="dspine" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dbody"><div class="dtop"><div class="dname">${esc(d.name||'Untitled')}</div><div class="dsbadge">${esc(d.size||'&mdash;')}</div></div>${d.description?`<div class="ddesc">${esc(d.description)}</div>`:''}<div class="dmeta"><span>&#128193; ${cnt} items</span>${ls?`<span>&#128197; ${esc(ls)}</span>`:''} ${free}</div>${bar}</div></button>`;
+}
+
+function buildSearch(q){
+  const grp={};
+  drives.forEach(d=>(d.contents||[]).forEach(c=>{
+    const hay=[c.name,c.shootDate,c.note].filter(Boolean).join(' ').toLowerCase();
+    if(!hay.includes(q))return;
+    const k=(c.name||'').trim().toLowerCase()||'_';
+    if(!grp[k])grp[k]={name:c.name||'(unnamed)',dates:new Set(),drives:[]};
+    if(c.shootDate)grp[k].dates.add(c.shootDate);
+    if(!grp[k].drives.some(x=>x.id===d.id))grp[k].drives.push(d);
+  }));
+  const ga=Object.values(grp).sort((a,b)=>b.drives.length-a.drives.length);
+  const md=drives.filter(d=>[d.name,d.description,d.size].filter(Boolean).join(' ').toLowerCase().includes(q));
+  if(!ga.length&&!md.length)return `<div class="empty"><div class="ei">&#128269;</div><div class="et">No matches</div><div class="eh">Nothing found for &ldquo;${esc(q)}&rdquo;.</div></div>`;
+  let h='';
+  if(ga.length){
+    h+=`<div class="slbl">Projects / Files &middot; ${ga.length}</div>`;
+    h+=ga.map(g=>{const n=g.drives.length;const bk=n>=2;const dt=[...g.dates].join(' &middot; ');
+      const chips=g.drives.map(d=>`<button class="dchip" onclick="openDetail('${esc(d.id)}')"><span class="cdot" style="background:${esc(d.color||'#DDDBD1')}"></span>${esc(d.name)}</button>`).join('');
+      return `<div class="rcard"><div class="rtop"><div><div class="rname">${esc(g.name)}</div>${dt?`<div class="cdate" style="margin-top:3px">&#128197; ${dt}</div>`:''}</div><div class="bbadge" style="background:${bk?'#E5F0E8':'#F7E9DF'}"><div class="bbx" style="color:${bk?'var(--good)':'var(--warn)'}">&times;${n}</div><div class="bbl" style="color:${bk?'var(--good)':'var(--warn)'}">${bk?'backed up':'no backup'}</div></div></div><div class="dchips">&#9726; ${chips}</div></div>`;
+    }).join('');
+  }
+  if(md.length)h+=`<div class="slbl" style="margin-top:${ga.length?'18px':'0'}">Drives &middot; ${md.length}</div>`+md.map(d=>buildCard(d)).join('');
+  return h;
+}
+
+// Detail
+let _did=null;
+function openDetail(id){
+  _did=id;const d=drives.find(x=>x.id===id);if(!d)return;
+  const st=dStats(d);const cnt=d.contents||[];
+  loadPhotos(cnt.flatMap(c=>c.photos||[]));
+  let cap='';
+  if(st.cap){cap=`<div class="cpanel"><div class="ctop"><span class="slbl" style="margin:0">CAPACITY</span><span style="font-size:12px;color:var(--muted)">conservative estimate</span></div><div class="cbar"><div class="cfill${st.pct>88?' w':''}" style="width:${Math.min(100,st.pct)}%"></div></div><div class="ccells"><div class="ccell"><div class="cv">${fmtSize(st.used)}</div><div class="cl">Used</div></div><div class="ccell"><div class="cv" style="color:${st.pct>88?'var(--warn)':'var(--good)'}">${fmtSize(st.free)}</div><div class="cl">Safe free</div></div><div class="ccell"><div class="cv" style="color:var(--muted)">${esc(d.size)}</div><div class="cl">Drive size</div></div></div></div>`;}
+  else cap=`<p style="font-size:12.5px;color:var(--muted);margin-bottom:18px">Enter a capacity and item sizes to track free space.</p>`;
+  let items='';
+  if(!cnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
+  else{items=cnt.map(c=>{
+    const ph=(c.photos||[]).map(pid=>{const u=photoCache[pid];return `<div class="pthumb" onclick="${u?`openLB('${pid}')`:'void(0)'}" style="cursor:${u?'pointer':'default'}">${u?`<img src="${esc(u)}" alt="proof"/>`:'&#128444;'}</div>`;}).join('');
+    return `<div class="citem"><div class="crow"><span style="margin-top:2px;flex-shrink:0">&#128193;</span><div class="cinfo"><div class="cname">${esc(c.name)}</div><div class="cmeta">${c.shootDate?`<span class="cdate">&#128197; ${esc(c.shootDate)}</span>`:''}${c.sizeGB>0?`<span class="csize">${fmtSize(Number(c.sizeGB))}</span>`:''}</div>${c.note?`<div class="cnote">${esc(c.note)}</div>`:''}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
+  }).join('');}
+  openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${cnt.length} items</span></div>${cap}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div><div style="margin-top:10px">${items}</div>`);
+}
+
+// Drive form
+let _eid=null;
+function openDriveForm(id){
+  _eid=id;const d=id?drives.find(x=>x.id===id):null;
+  const sw=SPINE.map(s=>`<div class="csw${(d&&d.color===s.h)||(!d&&s.h==='#3E7CB1')?' a':''}" style="background:${s.h}" title="${s.n}" data-h="${s.h}" onclick="selColor(this)">${(d&&d.color===s.h)||(!d&&s.h==='#3E7CB1')?'&#10003;':''}</div>`).join('');
+  openSheet(`<div class="shdr"><div class="stitle">${id?'Edit drive':'Add drive'}</div><button class="ibtn" onclick="closeSheet()">&#10005;</button></div><div class="field"><div class="fl">Drive name *</div><input id="fn" type="text" placeholder="e.g. HDD-018 / Project Falcon" value="${esc(d?.name||'')}"/></div><div class="field"><div class="fl">Description</div><input id="fd" type="text" placeholder="e.g. WD red label / commercial masters" value="${esc(d?.description||'')}"/></div><div class="field"><div class="fl">Capacity</div><input id="fs" type="text" placeholder="e.g. 4T, 1TB, 8T" value="${esc(d?.size||'')}"/></div><div class="field"><div class="fl">Color tag</div><div class="cgrid" id="cg">${sw}</div></div><button class="bprim" id="sdb" onclick="saveDrive()">&#10003; Save to Google Sheets</button>`);
+  setTimeout(()=>document.getElementById('fn')?.focus(),100);
+}
+function selColor(el){document.querySelectorAll('.csw').forEach(s=>{s.classList.remove('a');s.textContent='';});el.classList.add('a');el.innerHTML='&#10003;';}
+async function saveDrive(){
+  const name=document.getElementById('fn')?.value?.trim();if(!name){alert('Please enter a drive name.');return;}
+  const color=document.querySelector('.csw.a')?.dataset.h||'#3E7CB1';
+  const d={id:_eid||uid(),name,description:document.getElementById('fd')?.value||'',color,size:document.getElementById('fs')?.value||'',contents:_eid?(drives.find(x=>x.id===_eid)?.contents||[]):[]};
+  const btn=document.getElementById('sdb');btn.disabled=true;btn.textContent='Saving\u2026';
+  try{await gsPost({action:'writeDrive',data:d});closeSheet();await loadFromSheets();toast('Drive saved \u2713');}
+  catch(e){alert('Save failed: '+e.message);btn.disabled=false;btn.textContent='\u2713 Save to Google Sheets';}
+}
+
+// Content form
+let _cDid=null,_cCid=null,_cPhotos=[];
+function openCF(driveId,cid){
+  _cDid=driveId;_cCid=cid;
+  const d=drives.find(x=>x.id===driveId);const c=cid?(d?.contents||[]).find(x=>x.id===cid):null;
+  _cPhotos=(c?.photos||[]).map(id=>({id}));
+  openSheet(`<div class="shdr"><div class="stitle">${cid?'Edit item':'Add item'}</div><button class="ibtn" onclick="closeSheet()">&#10005;</button></div><div class="field"><div class="fl">File / folder name *</div><input id="cfn" type="text" placeholder="e.g. 2024_Commercial_ProjectA" value="${esc(c?.name||'')}"/></div><div class="frow"><div class="field"><div class="fl">Size</div><input id="cfs" type="text" placeholder="e.g. 850G, 1.2T" value="${esc(c?sizeToStr(c.sizeGB):'')}" /></div><div class="field"><div class="fl">Shoot date</div><input id="cfd" type="text" placeholder="e.g. 2024-03-15" value="${esc(c?.shootDate||'')}"/></div></div><div class="field"><div class="fl">Note</div><textarea id="cfno" placeholder="e.g. RAW + graded master">${esc(c?.note||'')}</textarea></div><div class="field"><div class="fl">Proof photos</div><div class="pegrid" id="pg"></div></div><button class="bprim" id="scb" onclick="saveContent()">&#10003; Save to Google Sheets</button>`);
+  renderFP();
+  Promise.all(_cPhotos.map(async p=>{if(!p.id||photoCache[p.id])return;try{const j=await gsGet({action:'readPhoto',id:p.id});if(j.data){photoCache[p.id]=j.data;const fp=_cPhotos.find(x=>x.id===p.id);if(fp)fp.url=j.data;}}catch{}})).then(renderFP);
+  setTimeout(()=>document.getElementById('cfn')?.focus(),100);
+}
+function renderFP(){
+  const g=document.getElementById('pg');if(!g)return;
+  let h=_cPhotos.map((p,i)=>`<div class="pei"><div class="pein">${p.url?`<img src="${esc(p.url)}" alt="p"/>`:(p.id&&photoCache[p.id]?`<img src="${esc(photoCache[p.id])}" alt="p"/>`:'&#128444;')}</div><button class="pdel" onclick="rmFP(${i})">&#10005;</button></div>`).join('');
+  h+=`<label class="padd"><input type="file" accept="image/*" multiple style="display:none" onchange="addFP(this)">&#128247;<span>Add</span></label>`;
+  g.innerHTML=h;
+}
+function rmFP(i){_cPhotos.splice(i,1);renderFP();}
+async function addFP(inp){for(const f of Array.from(inp.files).slice(0,8)){try{const url=await compress(f);_cPhotos.push({url});renderFP();}catch{}}inp.value='';}
+function compress(file,maxD=1280,q=0.7){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let{width:w,height:h}=img;if(w>h&&w>maxD){h=h*maxD/w;w=maxD;}else if(h>=w&&h>maxD){w=w*maxD/h;h=maxD;}const cv=document.createElement('canvas');cv.width=Math.round(w);cv.height=Math.round(h);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',q));};img.onerror=rej;img.src=r.result;};r.onerror=rej;r.readAsDataURL(file);});}
+async function saveContent(){
+  const name=document.getElementById('cfn')?.value?.trim();if(!name){alert('Please enter a name.');return;}
+  const btn=document.getElementById('scb');btn.disabled=true;btn.textContent='Saving\u2026';
+  try{
+    const fps=[];
+    for(const p of _cPhotos){if(p.id){fps.push(p.id);}else{const pid=uid();await gsPost({action:'writePhoto',id:pid,data:p.url});fps.push(pid);}}
+    const item={id:_cCid||uid(),driveId:_cDid,name,size:document.getElementById('cfs')?.value||'',sizeGB:parseGB(document.getElementById('cfs')?.value||'','g'),shootDate:document.getElementById('cfd')?.value||'',note:document.getElementById('cfno')?.value||'',photos:fps};
+    await gsPost({action:'writeContent',data:item});closeSheet();await loadFromSheets();toast('Item saved \u2713');
+  }catch(e){alert('Save failed: '+e.message);btn.disabled=false;btn.textContent='\u2713 Save to Google Sheets';}
+}
+
+// Delete
+function confDelD(id){const d=drives.find(x=>x.id===id);if(!d)return;openSheet(`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:18px"><span style="font-size:20px">&#9888;&#65039;</span><div style="font-size:16px;font-weight:600;line-height:1.5">Delete drive &ldquo;${esc(d.name)}&rdquo; and all its contents?</div></div><div class="bpair"><button class="bghost" onclick="closeSheet()">Cancel</button><button class="bprim bw" onclick="delDrive('${esc(id)}')">Delete</button></div>`);}
+async function delDrive(id){const b=document.querySelector('.bw');if(b){b.disabled=true;b.textContent='Deleting\u2026';}try{await gsPost({action:'deleteDrive',id});closeSheet();await loadFromSheets();toast('Drive deleted');}catch(e){alert('Delete failed: '+e.message);}}
+function confDelC(did,cid){const d=drives.find(x=>x.id===did);const c=(d?.contents||[]).find(x=>x.id===cid);if(!c)return;openSheet(`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:18px"><span style="font-size:20px">&#9888;&#65039;</span><div style="font-size:16px;font-weight:600;line-height:1.5">Delete item &ldquo;${esc(c.name)}&rdquo;?</div></div><div class="bpair"><button class="bghost" onclick="closeSheet()">Cancel</button><button class="bprim bw" onclick="delContent('${esc(did)}','${esc(cid)}')">Delete</button></div>`);}
+async function delContent(did,cid){const b=document.querySelector('.bw');if(b){b.disabled=true;b.textContent='Deleting\u2026';}try{await gsPost({action:'deleteContent',id:cid});closeSheet();await loadFromSheets();toast('Item deleted');}catch(e){alert('Delete failed: '+e.message);}}
+
+// Sheet
+function openSheet(h){document.getElementById('sc').innerHTML=h;document.getElementById('ov').style.display='flex';document.body.style.overflow='hidden';}
+function closeSheet(){document.getElementById('ov').style.display='none';document.body.style.overflow='';}
+function ovClick(e){if(e.target===document.getElementById('ov'))closeSheet();}
+
+// Lightbox
+function openLB(pid){const u=photoCache[pid];if(!u)return;document.getElementById('lbi').src=u;document.getElementById('lb').style.display='flex';}
+function closeLB(){document.getElementById('lb').style.display='none';}
+
+// Init
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!isBusy)loadFromSheets();});
+window.addEventListener('focus',()=>{if(!isBusy)loadFromSheets();});
+loadFromSheets();
+</script>
+</body>
+</html>
