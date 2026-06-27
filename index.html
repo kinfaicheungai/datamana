@@ -91,8 +91,11 @@
   .chead{padding:8px 10px;background:var(--alt);font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:800;}
   .citem{background:var(--surface);border-top:1px solid var(--line);padding:8px 10px;min-height:42px;}
   .citem:first-child{border-top:none;}
-  .cfile{min-width:0;display:flex;align-items:flex-start;gap:8px;}
+  .cfile{min-width:0;display:flex;align-items:flex-start;gap:6px;}
+  .ctwist{width:16px;height:18px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;line-height:18px;flex-shrink:0;padding:0;margin-top:0;}
+  .ctwist.blank{cursor:default;color:transparent;}
   .cico{width:18px;flex-shrink:0;line-height:1.2;margin-top:1px;}
+  .cico.folder{color:#4A90B8;}
   .cinfo{min-width:0;}
   .cname{font-weight:700;font-size:13.5px;line-height:1.25;word-break:break-word;}
   .cnote{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.25;word-break:break-word;}
@@ -146,7 +149,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.1 FINDER LIST</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.2 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -193,9 +196,30 @@ function parseGB(s,d='g'){if(!s&&s!==0)return 0;const m=String(s).match(/([\d.]+
 function fmtSize(g){if(!g)return '0 GB';return g>=1000?(Math.round(g/100)/10)+' TB':Math.round(g)+' GB';}
 function sizeToStr(g){if(!g)return '';return g>=1000?(Math.round(g/100)/10)+'T':Math.round(g)+'G';}
 function fmtDateOnly(v){if(!v)return '';const s=String(v);const m=s.match(/^(\d{4}-\d{2}-\d{2})/);return m?m[1]:s;}
+function parseNoteMeta(note){
+  const meta={kind:'',row:'',level:null,parentPath:''};
+  String(note||'').split(' · ').forEach(part=>{
+    const m=part.match(/^([^:]+):\s*(.*)$/);if(!m)return;
+    const k=m[1].trim().toLowerCase(),v=m[2].trim();
+    if(k==='kind')meta.kind=v;
+    else if(k==='row')meta.row=v;
+    else if(k==='level')meta.level=Number(v);
+    else if(k==='parent')meta.parentPath=v;
+  });
+  return meta;
+}
+function makeImportNote(it){
+  return [
+    it.kind?('Kind: '+it.kind):'',
+    it.name?('Row: '+it.name):'',
+    Number.isFinite(it.level)?('Level: '+it.level):'',
+    it.parentPath?('Parent: '+it.parentPath):''
+  ].filter(Boolean).join(' · ');
+}
 function dStats(d){const nom=parseGB(d.size,'t');const used=(d.contents||[]).reduce((s,c)=>s+(Number(c.sizeGB)||0),0);const usable=nom*USABLE;const free=Math.max(0,(usable-used)*SAFE);const pct=usable>0?Math.min(100,(used/usable)*100):0;return{nom,used,usable,free,pct,cap:nom>0};}
 function totTB(){return drives.reduce((s,d)=>s+parseGB(d.size,'t'),0)/1000;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function jsArg(s){return JSON.stringify(String(s||'')).replace(/</g,'\\u003c');}
 function toast(m='Saved to Google Sheets'){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 // Sync pill
@@ -235,12 +259,15 @@ async function analyseImageDirect(base64,mimeType){
     'Treat the screenshot as a table with columns: Name, Date Modified, Size, Kind.',
     'Extract every visible file/folder row that has a readable Name. Do not invent names.',
     'Preserve exact spelling, spacing, underscores, capitalization and file extensions.',
-    'For expanded folders, include child rows too. Use path to show hierarchy, for example "Green Frog / A Cam".',
-    'For each row, return the row name, full path, date, size and kind from the SAME ROW.',
+    'Reconstruct the visible folder tree exactly as Finder shows it.',
+    'For expanded folders, include child rows under their visible parent. Use indentation/disclosure arrows to infer hierarchy.',
+    'Use path to show hierarchy, for example "Green Frog / A Cam". Top-level rows have path equal to name.',
+    'Return level as an integer: top-level = 0, child = 1, grandchild = 2. Return parentPath as the parent full path or empty string for top-level.',
+    'For each row, return the row name, full path, parentPath, level, date, size and kind from the SAME ROW.',
     'Convert dates to YYYY-MM-DD. Current date is 2026-06-27; "Yesterday" means 2026-06-26.',
     'Normalize sizes like "273.8 GB", "1.3 MB", "Zero bytes"; if not visible use empty string.',
     'Return ONLY valid JSON, no markdown, no explanation.',
-    '{"items":[{"name":"exact row name","path":"parent / child if visible, otherwise same as name","date":"YYYY-MM-DD or empty","size":"273.8 GB","kind":"Folder or Media File or empty"}]}'
+    '{"items":[{"name":"exact row name","path":"parent / child if visible, otherwise same as name","parentPath":"parent path or empty","level":0,"date":"YYYY-MM-DD or empty","size":"273.8 GB","kind":"Folder or Media File or empty"}]}'
   ].join('\\n');
   const r=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -357,7 +384,24 @@ function buildSearch(q){
 }
 
 // Detail
-let _did=null;
+let _did=null,_collapsedFolders=new Set();
+function folderKey(driveId,path){return driveId+'::'+path;}
+function toggleFolder(path){
+  const k=folderKey(_did,path);
+  if(_collapsedFolders.has(k))_collapsedFolders.delete(k);else _collapsedFolders.add(k);
+  openDetail(_did);
+}
+function contentNode(c){
+  const meta=parseNoteMeta(c.note);
+  const path=String(c.name||'').trim();
+  const parts=path.split('/').map(p=>p.trim()).filter(Boolean);
+  const fallbackLevel=Math.max(0,parts.length-1);
+  const level=Number.isFinite(meta.level)?meta.level:fallbackLevel;
+  const name=meta.row||parts[parts.length-1]||path;
+  const parentPath=meta.parentPath||parts.slice(0,-1).join(' / ');
+  const kind=meta.kind||'';
+  return{c,path,name,parentPath,level,kind};
+}
 function openDetail(id){
   _did=id;const d=drives.find(x=>x.id===id);if(!d)return;
   const st=dStats(d);const cnt=d.contents||[];
@@ -367,11 +411,26 @@ function openDetail(id){
   else cap=`<p style="font-size:12.5px;color:var(--muted);margin-bottom:18px">Enter a capacity and item sizes to track free space.</p>`;
   let items='';
   if(!cnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
-  else{items='<div class="clist"><div class="chead"><div>Name</div><div>Date modified</div><div>Size</div><div></div></div>'+cnt.map(c=>{
+  else{
+    const nodes=cnt.map(contentNode);
+    const hasChildren=path=>nodes.some(n=>n.parentPath===path);
+    const isHidden=n=>{
+      const parts=n.path.split('/').map(p=>p.trim()).filter(Boolean);
+      for(let i=1;i<parts.length;i++){
+        const p=parts.slice(0,i).join(' / ');
+        if(_collapsedFolders.has(folderKey(d.id,p)))return true;
+      }
+      return false;
+    };
+    items='<div class="clist"><div class="chead"><div>Name</div><div>Date modified</div><div>Size</div><div></div></div>'+nodes.filter(n=>!isHidden(n)).map(n=>{
+    const c=n.c;
     const ph=(c.photos||[]).map(pid=>{const u=photoCache[pid];return `<div class="pthumb" onclick="${u?`openLB('${pid}')`:'void(0)'}" style="cursor:${u?'pointer':'default'}">${u?`<img src="${esc(u)}" alt="proof"/>`:'&#128444;'}</div>`;}).join('');
     const size=c.size||((Number(c.sizeGB)||0)>0?fmtSize(Number(c.sizeGB)):'');
-    const kind=(c.note||'').replace(/^Kind:\s*/,'').split(' · ')[0];
-    return `<div class="citem"><div class="cfile"><span class="cico">&#128193;</span><div class="cinfo"><div class="cname">${esc(c.name)}</div>${kind?`<div class="cnote">${esc(kind)}</div>`:''}</div></div><div class="cdate">${esc(fmtDateOnly(c.shootDate))}</div><div class="csize">${esc(size)}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
+    const isFolder=/folder/i.test(n.kind)||hasChildren(n.path);
+    const collapsed=_collapsedFolders.has(folderKey(d.id,n.path));
+    const twist=hasChildren(n.path)?`<button class="ctwist" onclick="event.stopPropagation();toggleFolder(${jsArg(n.path)})" title="${collapsed?'Expand':'Collapse'}">${collapsed?'&#9656;':'&#9662;'}</button>`:'<span class="ctwist blank">&#9656;</span>';
+    const indent=Math.min(84,n.level*22);
+    return `<div class="citem"><div class="cfile" style="padding-left:${indent}px">${twist}<span class="cico${isFolder?' folder':''}">${isFolder?'&#128193;':'&#128196;'}</span><div class="cinfo"><div class="cname">${esc(n.name)}</div>${n.kind?`<div class="cnote">${esc(n.kind)}</div>`:''}</div></div><div class="cdate">${esc(fmtDateOnly(c.shootDate))}</div><div class="csize">${esc(size)}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
   }).join('')+'</div>';}
   openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${cnt.length} items</span></div>${cap}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div><div style="margin-top:10px">${items}</div>`);
 }
@@ -483,10 +542,13 @@ function normalizeAIItems(items){
   return (items||[]).map(it=>{
     const name=String(it.name||it.fileName||it.folderName||'').trim();
     const path=String(it.path||name).trim();
+    const parts=path.split('/').map(p=>p.trim()).filter(Boolean);
+    const level=Number.isFinite(Number(it.level))?Number(it.level):Math.max(0,parts.length-1);
+    const parentPath=String(it.parentPath||parts.slice(0,-1).join(' / ')).trim();
     const date=String(it.date||it.shootDate||it.modifiedDate||'').trim();
     const size=String(it.size||'').trim();
     const kind=String(it.kind||'').trim();
-    return{name,path,date,size,kind};
+    return{name,path,parentPath,level,date,size,kind};
   }).filter(it=>it.name);
 }
 function renderAIImportPreview(items){
@@ -499,7 +561,8 @@ function renderAIImportPreview(items){
   h+='<thead><tr style="background:#F1F8F4;color:#315D3D;text-align:left"><th style="padding:7px">Name / path</th><th style="padding:7px;white-space:nowrap">Date</th><th style="padding:7px;white-space:nowrap">Size</th></tr></thead><tbody>';
   items.forEach((it,i)=>{
     const meta=[it.kind,it.path&&it.path!==it.name?it.path:''].filter(Boolean).join(' · ');
-    h+=`<tr onclick="fillFromAI(${i})" style="border-top:1px solid #E1EFE6;cursor:pointer"><td style="padding:7px"><div style="font-weight:700;color:#174A2C">${esc(it.name)}</div>${meta?`<div style="color:#668170;font-size:11px;margin-top:2px">${esc(meta)}</div>`:''}</td><td style="padding:7px;white-space:nowrap;color:#174A2C">${esc(it.date||'')}</td><td style="padding:7px;white-space:nowrap;color:#174A2C">${esc(it.size||'')}</td></tr>`;
+    const indent=Math.min(54,(Number(it.level)||0)*18);
+    h+=`<tr onclick="fillFromAI(${i})" style="border-top:1px solid #E1EFE6;cursor:pointer"><td style="padding:7px"><div style="padding-left:${indent}px"><div style="font-weight:700;color:#174A2C">${esc(it.name)}</div>${meta?`<div style="color:#668170;font-size:11px;margin-top:2px">${esc(meta)}</div>`:''}</div></td><td style="padding:7px;white-space:nowrap;color:#174A2C">${esc(it.date||'')}</td><td style="padding:7px;white-space:nowrap;color:#174A2C">${esc(it.size||'')}</td></tr>`;
   });
   h+='</tbody></table></div>';
   h+='<div style="font-size:11px;color:#4F735C;margin-top:8px">Tap one row to fill the form, or add all rows to this drive.</div>';
@@ -519,7 +582,7 @@ async function addAllAIItems(){
         size:it.size||'',
         sizeGB:parseGB(it.size||'','g'),
         shootDate:it.date||'',
-        note:[it.kind?('Kind: '+it.kind):'',it.path&&it.path!==it.name?('Row: '+it.name):''].filter(Boolean).join(' · '),
+        note:makeImportNote(it),
         photos:[]
       };
       await gsPost({action:'writeContent',data:item});
@@ -540,8 +603,7 @@ function fillFromAI(i){
   if(it.size)document.getElementById('cfs').value=it.size;
   const note=document.getElementById('cfno');
   if(note){
-    const parts=[it.kind?('Kind: '+it.kind):'',it.path&&it.path!==it.name?('Row: '+it.name):''].filter(Boolean);
-    note.value=parts.join(' · ');
+    note.value=makeImportNote(it);
   }
   // highlight filled fields briefly
   ['cfn','cfd','cfs'].forEach(id=>{
