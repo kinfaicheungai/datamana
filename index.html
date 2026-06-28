@@ -156,7 +156,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v2.9 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.0 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -226,11 +226,12 @@ function makeImportNote(it){
     it.parentPath?('Parent: '+it.parentPath):''
   ].filter(Boolean).join(' · ');
 }
+function isRefItem(c){return /__REF__/.test((c&&c.note)||'')||((c&&c.name)==='__DRIVE_REF__');}
 function dStats(d){
   const nom=parseGB(d.size,'t');
   // Only sum TOP-LEVEL (level 0) items — folder sizes already include their children,
   // so summing nested rows too would double-count.
-  const cs=(d.contents||[]);
+  const cs=(d.contents||[]).filter(c=>!isRefItem(c));
   const hasMeta=cs.some(c=>{const m=parseNoteMeta(c.note);return Number.isFinite(m.level);});
   const used=cs.reduce((s,c)=>{
     const lv=hasMeta?(Number.isFinite(parseNoteMeta(c.note).level)?parseNoteMeta(c.note).level:0):0;
@@ -384,7 +385,7 @@ function renderMain(){
 function clearSearch(){document.getElementById('sInput').value='';document.getElementById('sClear').style.display='none';renderMain();}
 
 function buildCard(d){
-  const st=dStats(d);const cnt=(d.contents||[]).length;
+  const st=dStats(d);const cnt=(d.contents||[]).filter(c=>!isRefItem(c)).length;
   const ls=(d.contents||[]).map(c=>c.shootDate).filter(Boolean).sort().slice(-1)[0];
   const bar=st.cap&&st.used>0?`<div class="ubar"><div class="ufill${st.pct>88?' w':''}" style="width:${st.pct}%"></div></div>`:'';
   const free=st.cap&&st.used>0?`<span class="good">~${fmtSize(st.free)} free</span>`:'';
@@ -393,7 +394,7 @@ function buildCard(d){
 
 function buildSearch(q){
   const grp={};
-  drives.forEach(d=>(d.contents||[]).forEach(c=>{
+  drives.forEach(d=>(d.contents||[]).filter(c=>!isRefItem(c)).forEach(c=>{
     const hay=[c.name,c.shootDate,c.note].filter(Boolean).join(' ').toLowerCase();
     if(!hay.includes(q))return;
     const k=(c.name||'').trim().toLowerCase()||'_';
@@ -451,14 +452,17 @@ function contentNode(c){
 function openDetail(id){
   _did=id;const d=drives.find(x=>x.id===id);if(!d)return;
   const st=dStats(d);const cnt=d.contents||[];
-  loadPhotos(cnt.flatMap(c=>c.photos||[]));
+  const realCnt=cnt.filter(c=>!isRefItem(c));
+  const refItem=cnt.find(isRefItem);const refPid=refItem&&(refItem.photos||[])[0];
+  loadPhotos([...realCnt.flatMap(c=>c.photos||[]),...(refPid?[refPid]:[])]);
+  if(refPid&&!photoCache[refPid]){gsGet({action:'readPhoto',id:refPid}).then(j=>{if(j&&j.data){photoCache[refPid]=j.data;if(_did===id)openDetail(id);}}).catch(()=>{});}
   let cap='';
   if(st.cap){cap=`<div class="cpanel"><div class="ctop"><span class="slbl" style="margin:0">CAPACITY</span><span style="font-size:12px;color:var(--muted)">conservative estimate</span></div><div class="cbar"><div class="cfill${st.pct>88?' w':''}" style="width:${Math.min(100,st.pct)}%"></div></div><div class="ccells"><div class="ccell"><div class="cv">${fmtSize(st.used)}</div><div class="cl">Used</div></div><div class="ccell"><div class="cv" style="color:${st.pct>88?'var(--warn)':'var(--good)'}">${fmtSize(st.free)}</div><div class="cl">Safe free</div></div><div class="ccell"><div class="cv" style="color:var(--muted)">${esc(d.size)}</div><div class="cl">Drive size</div></div></div></div>`;}
   else cap=`<p style="font-size:12.5px;color:var(--muted);margin-bottom:18px">Enter a capacity and item sizes to track free space.</p>`;
   let items='';
-  if(!cnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
+  if(!realCnt.length){items=`<p style="padding:26px 0;text-align:center;color:var(--muted);font-size:14px">No records yet. Tap &ldquo;Add item&rdquo; to log contents.</p>`;}
   else{
-    const nodes=cnt.map(contentNode);
+    const nodes=realCnt.map(contentNode);
     // parent of each row = nearest earlier row with smaller level (Finder-style outline)
     const parentIdx=[]; const stack=[];
     for(let i=0;i<nodes.length;i++){
@@ -485,7 +489,107 @@ function openDetail(id){
     const indent=Math.min(84,(n.level||0)*22);
     return `<div class="citem"><div class="cfile" style="padding-left:${indent}px">${twist}<span class="cico${isFolder?' folder':''}">${isFolder?'&#128193;':'&#128196;'}</span><div class="cinfo"><div class="cname">${esc(n.name)}</div>${n.kind?`<div class="cnote">${esc(n.kind)}</div>`:''}</div></div><div class="cdate">${esc(fmtDateOnly(c.shootDate))}</div><div class="csize">${esc(size)}</div><div class="cacts"><button class="ibtn" onclick="openCF('${esc(d.id)}','${esc(c.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelC('${esc(d.id)}','${esc(c.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div>${ph?`<div class="pgrid">${ph}</div>`:''}</div>`;
   }).join('')+'</div>';}
-  openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${cnt.length} items</span></div>${cap}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div><div style="margin-top:10px">${items}</div>`);
+  const _bs="background:var(--alt);border:1px solid var(--line);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--ink);font-family:var(--sans)";
+  let refBlock='';
+  if(refPid){const u=photoCache[refPid];refBlock=`<div style="margin:14px 0;padding:12px;background:var(--alt);border:1px solid var(--line);border-radius:10px"><div class="slbl" style="margin:0 0 8px">Reference screenshot</div><div style="display:flex;align-items:center;gap:10px"><div onclick="viewDriveRef('${esc(refPid)}')" style="width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;flex:0 0 auto">${u?`<img src="${esc(u)}" style="width:100%;height:100%;object-fit:cover"/>`:'&#128247;'}</div><button style="${_bs}" onclick="addDriveRef('${esc(d.id)}')">Replace</button><button style="${_bs};color:var(--warn)" onclick="rmDriveRef('${esc(d.id)}','${esc(refItem.id)}')">Remove</button></div></div>`;}
+  else{refBlock=`<div style="margin:14px 0"><button style="${_bs}" onclick="addDriveRef('${esc(d.id)}')">&#128247; Add reference screenshot</button></div>`;}
+  openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${realCnt.length} items</span></div>${cap}${refBlock}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><div style="display:flex;gap:8px"><button class="aibtn" onclick="rescanCompare('${esc(d.id)}')" style="background:var(--ink)">&#128260; Re-scan</button><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div></div><div style="margin-top:10px">${items}</div>`);
+}
+
+
+// ---- Drive reference screenshot (attached to drive, not counted, compressed JPEG in Photos sheet) ----
+function addDriveRef(driveId){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    try{
+      toast('Compressing\u2026');
+      const url=await compress(f,1400,0.72);           // ~1400px JPEG q0.72
+      const pid=uid();
+      await gsPost({action:'writePhoto',id:pid,data:url});
+      photoCache[pid]=url;
+      const item={id:'refimg_'+driveId,driveId,name:'__DRIVE_REF__',size:'',sizeGB:0,shootDate:'',note:'Kind: __REF__',photos:[pid]};
+      await gsPost({action:'writeContent',data:item});
+      await loadFromSheets();openDetail(driveId);toast('Reference screenshot saved \u2713');
+    }catch(e){alert('Save failed: '+e.message);}
+  };
+  inp.click();
+}
+async function viewDriveRef(pid){
+  if(!photoCache[pid]){try{const j=await gsGet({action:'readPhoto',id:pid});if(j&&j.data)photoCache[pid]=j.data;}catch{}}
+  openLB(pid);
+}
+function rmDriveRef(driveId,refId){
+  if(!confirm('Remove the reference screenshot?'))return;
+  gsPost({action:'deleteContent',id:refId}).then(()=>loadFromSheets()).then(()=>openDetail(driveId)).then(()=>toast('Reference removed')).catch(e=>alert('Failed: '+e.message));
+}
+
+// ---- Re-scan & compare: analyse a fresh screenshot and diff against what is already logged ----
+let _diff=null;
+async function rescanCompare(driveId){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    const d=drives.find(x=>x.id===driveId);if(!d)return;
+    openSheet(`<div class="shdr"><div class="stitle">Re-scan &amp; compare</div><button class="ibtn" onclick="openDetail('${esc(driveId)}')">&#10005;</button></div><div id="rscont" style="font-size:14px;color:var(--muted);padding:24px 0;text-align:center">Analysing screenshot &amp; comparing\u2026</div>`);
+    try{
+      const dataUrl=await compress(f,1800,0.86);
+      const base64=dataUrl.split(',')[1];
+      const j=await gsImageAnalysis(base64,'image/jpeg');
+      const newItems=normalizeAIItems(j.items||[]);
+      const cont=document.getElementById('rscont');
+      if(!newItems.length){if(cont)cont.innerHTML='No rows detected. Try a clearer screenshot.';return;}
+      const norm=s=>String(s||'').replace(/\s+/g,' ').trim();
+      const existing=(d.contents||[]).filter(c=>!isRefItem(c));
+      const exMap={};existing.forEach(c=>{exMap[norm(c.name)]=c;});
+      const exPaths=new Set(Object.keys(exMap));
+      const newMap={};newItems.forEach(it=>{newMap[norm(it.path||it.name)]=it;});
+      const newPaths=new Set(Object.keys(newMap));
+      const added=newItems.filter(it=>!exPaths.has(norm(it.path||it.name)));
+      const removed=existing.filter(c=>!newPaths.has(norm(c.name)));
+      const changed=newItems.map(it=>({it,c:exMap[norm(it.path||it.name)]})).filter(o=>o.c&&(((o.it.size||'')!==(o.c.size||''))||((o.it.date||'')!==(o.c.shootDate||''))));
+      _diff={driveId,added,removed,changed};
+      if(cont)cont.outerHTML=renderDiff();
+    }catch(e){const el=document.getElementById('rscont');if(el)el.innerHTML='Analysis failed: '+esc(e.message);}
+  };
+  inp.click();
+}
+function renderDiff(){
+  const {added,removed,changed}=_diff;
+  const row=(name,meta,col)=>`<div style="padding:7px 10px;border-top:1px solid var(--line);font-size:12.5px"><span style="font-weight:600;color:${col||'var(--ink)'}">${esc(name)}</span>${meta?`<span style="color:var(--muted)"> \u00b7 ${esc(meta)}</span>`:''}</div>`;
+  const sec=(title,col,rows)=>`<div style="margin-bottom:14px"><div style="font-weight:700;color:${col};margin-bottom:6px;font-size:13px">${title} (${rows.length})</div>${rows.length?`<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)">${rows.join('')}</div>`:'<div style="font-size:12px;color:var(--muted)">None</div>'}</div>`;
+  const a=added.map(it=>row(it.path||it.name,[it.size,it.date].filter(Boolean).join(' \u00b7 '),'var(--good)'));
+  const r=removed.map(c=>row(c.name,c.size||'','var(--warn)'));
+  const ch=changed.map(o=>row(o.it.path||o.it.name,`${o.c.size||'\u2014'} \u2192 ${o.it.size||'\u2014'}`,'var(--accent)'));
+  const addN=added.length, chN=changed.length, rmN=removed.length;
+  let h=`<div class="shdr"><div class="stitle">Changes detected</div><button class="ibtn" onclick="openDetail('${esc(_diff.driveId)}')">&#10005;</button></div>`;
+  h+=`<div style="max-height:48vh;overflow:auto;margin-bottom:6px">`;
+  h+=sec('\u2795 New / added','var(--good)',a);
+  h+=sec('\u270E Size / date changed','var(--accent)',ch);
+  h+=sec('\u2796 Not in this screenshot','var(--warn)',r);
+  h+=`</div>`;
+  if(rmN)h+=`<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);margin-bottom:10px;cursor:pointer"><input type="checkbox" id="delrm"> Also delete the ${rmN} removed row${rmN>1?'s':''} <span style="color:var(--muted)">(only tick if the screenshot shows the whole drive)</span></label>`;
+  const safeN=addN+chN;
+  h+=`<button class="bprim" onclick="applyDiff()" ${(safeN+rmN)?'':'disabled'}>${(safeN+rmN)?('Apply changes'):'No changes'}</button>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">Adds new rows and updates changed sizes/dates. Removals are applied only if ticked.</div>`;
+  return `<div>${h}</div>`;
+}
+async function applyDiff(){
+  if(!_diff)return;
+  const {driveId,added,removed,changed}=_diff;
+  const doDel=document.getElementById('delrm')?.checked;
+  const btn=document.querySelector('.bprim');if(btn){btn.disabled=true;btn.textContent='Applying\u2026';}
+  try{
+    for(const it of added){
+      await gsPost({action:'writeContent',data:{id:uid(),driveId,name:it.path||it.name,size:it.size||'',sizeGB:parseGB(it.size||'','g'),shootDate:it.date||'',note:makeImportNote(it),photos:[]}});
+    }
+    for(const o of changed){
+      const c=o.c,it=o.it;
+      await gsPost({action:'writeContent',data:{id:c.id,driveId,name:c.name,size:it.size||'',sizeGB:parseGB(it.size||'','g'),shootDate:it.date||c.shootDate||'',note:c.note||makeImportNote(it),photos:c.photos||[]}});
+    }
+    if(doDel){for(const c of removed){await gsPost({action:'deleteContent',id:c.id});}}
+    _diff=null;await loadFromSheets();openDetail(driveId);toast('Changes applied \u2713');
+  }catch(e){alert('Apply failed: '+e.message);if(btn){btn.disabled=false;btn.textContent='Retry';}}
 }
 
 // Drive form
