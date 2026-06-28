@@ -156,7 +156,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.1 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.2 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -256,7 +256,17 @@ function setSP(st,ts){
 }
 
 // API
-async function gsGet(p){const r=await fetch(GS+'?'+new URLSearchParams(p));if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
+async function gsGet(p,_retry){
+  try{
+    const r=await fetch(GS+'?'+new URLSearchParams(p));
+    if(!r.ok)throw new Error('Network error');
+    const j=await r.json();if(j.error)throw new Error(j.error);return j;
+  }catch(e){
+    // one quiet retry for transient drops ("connection lost"/"offline")
+    if(!_retry){await new Promise(r=>setTimeout(r,900));return gsGet(p,true);}
+    throw e;
+  }
+}
 async function gsPost(b){
   // Large payloads (photos) go via POST with text/plain — avoids the URL-length
   // limit that was causing 400 errors, and text/plain skips the CORS preflight.
@@ -361,14 +371,26 @@ async function gsImageAnalysis(base64,mimeType){
   return analyseImageDirect(base64,mimeType);
 }
 
-async function loadFromSheets(){
-  setSP('syncing');
-  try{const data=await gsGet({action:'readAll'});drives=Array.isArray(data)?data:[];setSP('synced',new Date());updateStats();renderMain();loadPhotos(drives.flatMap(d=>(d.contents||[]).flatMap(c=>c.photos||[])));}
-  catch(e){setSP('error');console.error(e);}
+let _loading=false,_lastLoad=0;
+async function loadFromSheets(force){
+  // skip if a load is already running, or one finished < 1.5s ago (debounce focus+visibility)
+  if(_loading)return;
+  if(!force && Date.now()-_lastLoad<1500)return;
+  _loading=true;setSP('syncing');
+  try{
+    const data=await gsGet({action:'readAll'});
+    drives=Array.isArray(data)?data:[];
+    setSP('synced',new Date());updateStats();renderMain();
+    loadPhotos(drives.flatMap(d=>(d.contents||[]).flatMap(c=>c.photos||[])));
+  }catch(e){setSP('error');console.warn('reload skipped:',e.message);}
+  finally{_loading=false;_lastLoad=Date.now();}
 }
 async function loadPhotos(ids){
-  const miss=ids.filter(id=>id&&!(id in photoCache));
-  await Promise.all(miss.map(async id=>{try{const j=await gsGet({action:'readPhoto',id});if(j.data)photoCache[id]=j.data;}catch{}}));
+  const miss=[...new Set(ids.filter(id=>id&&!(id in photoCache)))];
+  // fetch in small batches so large reference images don't saturate the connection
+  for(let i=0;i<miss.length;i+=3){
+    await Promise.all(miss.slice(i,i+3).map(async id=>{try{const j=await gsGet({action:'readPhoto',id});if(j&&j.data)photoCache[id]=j.data;}catch{}}));
+  }
   renderMain();
 }
 
