@@ -156,7 +156,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.0 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.1 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -258,10 +258,16 @@ function setSP(st,ts){
 // API
 async function gsGet(p){const r=await fetch(GS+'?'+new URLSearchParams(p));if(!r.ok)throw new Error('Network error');const j=await r.json();if(j.error)throw new Error(j.error);return j;}
 async function gsPost(b){
+  // Large payloads (photos) go via POST with text/plain — avoids the URL-length
+  // limit that was causing 400 errors, and text/plain skips the CORS preflight.
+  if(b.action==='writePhoto'){
+    const r=await fetch(GS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'writePhoto',id:b.id,data:b.data})});
+    if(!r.ok)throw new Error('Network error '+r.status);
+    const j=await r.json();if(j.error)throw new Error(j.error);return j;
+  }
   const p={action:b.action};
   if(b.id) p.id=b.id;
   if(b.data) p.data=encodeURIComponent(JSON.stringify(b.data));
-  if(b.id&&b.data&&b.action==='writePhoto') p.data=encodeURIComponent(b.data);
   const r=await fetch(GS+'?'+new URLSearchParams(p));
   if(!r.ok)throw new Error('Network error');
   const j=await r.json();if(j.error)throw new Error(j.error);return j;
@@ -504,8 +510,8 @@ function addDriveRef(driveId){
     const f=inp.files[0];if(!f)return;
     try{
       toast('Compressing\u2026');
-      const url=await compress(f,1400,0.72);           // ~1400px JPEG q0.72
-      const pid=uid();
+      const url=await compress(f,1280,0.7);            // ~1280px JPEG q0.7
+      const pid='refphoto_'+driveId;                   // stable id ▸ replace overwrites, no orphan
       await gsPost({action:'writePhoto',id:pid,data:url});
       photoCache[pid]=url;
       const item={id:'refimg_'+driveId,driveId,name:'__DRIVE_REF__',size:'',sizeGB:0,shootDate:'',note:'Kind: __REF__',photos:[pid]};
