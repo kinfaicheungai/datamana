@@ -156,7 +156,7 @@
   <header class="hdr">
     <div class="hdr-row">
       <div>
-        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.2 TREE VIEW</div>
+        <div class="eyebrow">DRIVE VAULT · ND DATA MANAGEMENT &nbsp;v3.3 TREE VIEW</div>
         <div class="hdr-title">Hard Drive Catalog</div>
       </div>
       <button class="spill" id="syncPill" onclick="loadFromSheets()" title="Reload from Google Sheets">
@@ -521,7 +521,7 @@ function openDetail(id){
   let refBlock='';
   if(refPid){const u=photoCache[refPid];refBlock=`<div style="margin:14px 0;padding:12px;background:var(--alt);border:1px solid var(--line);border-radius:10px"><div class="slbl" style="margin:0 0 8px">Reference screenshot</div><div style="display:flex;align-items:center;gap:10px"><div onclick="viewDriveRef('${esc(refPid)}')" style="width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;flex:0 0 auto">${u?`<img src="${esc(u)}" style="width:100%;height:100%;object-fit:cover"/>`:'&#128247;'}</div><button style="${_bs}" onclick="addDriveRef('${esc(d.id)}')">Replace</button><button style="${_bs};color:var(--warn)" onclick="rmDriveRef('${esc(d.id)}','${esc(refItem.id)}')">Remove</button></div></div>`;}
   else{refBlock=`<div style="margin:14px 0"><button style="${_bs}" onclick="addDriveRef('${esc(d.id)}')">&#128247; Add reference screenshot</button></div>`;}
-  openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${realCnt.length} items</span></div>${cap}${refBlock}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><div style="display:flex;gap:8px"><button class="aibtn" onclick="rescanCompare('${esc(d.id)}')" style="background:var(--ink)">&#128260; Re-scan</button><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div></div><div style="margin-top:10px">${items}</div>`);
+  openSheet(`<div class="dhdr"><button class="ibtn" onclick="closeSheet()" style="color:var(--ink);font-size:20px">&lsaquo;</button><div class="ddot" style="background:${esc(d.color||'#DDDBD1')}"></div><div class="dn">${esc(d.name)}</div><button class="ibtn" onclick="openDriveForm('${esc(d.id)}')" title="Edit">&#9998;</button><button class="ibtn" onclick="confDelD('${esc(d.id)}')" title="Delete" style="color:var(--warn)">&#128465;</button></div><div class="trow"><span class="tag" style="font-family:var(--mono);font-weight:800;color:var(--accent)">${esc(d.size||'&mdash;')}</span>${d.description?`<span class="tag">${esc(d.description)}</span>`:''}<span class="tag">${realCnt.length} items</span></div>${cap}${refBlock}<div class="chrow"><div class="slbl" style="margin:0">Contents</div><div style="display:flex;gap:8px;flex-wrap:wrap">${realCnt.length?`<button class="aibtn" onclick="confClearAll('${esc(d.id)}')" style="background:var(--warn)">&#128465; Clear all</button>`:''}<button class="aibtn" onclick="rescanCompare('${esc(d.id)}')" style="background:var(--ink)">&#128260; Re-scan</button><button class="aibtn" onclick="openCF('${esc(d.id)}',null)">+ Add item</button></div></div><div style="margin-top:10px">${items}</div>`);
 }
 
 
@@ -674,6 +674,24 @@ function confDelD(id){const d=drives.find(x=>x.id===id);if(!d)return;openSheet(`
 async function delDrive(id){const b=document.querySelector('.bw');if(b){b.disabled=true;b.textContent='Deleting\u2026';}try{await gsPost({action:'deleteDrive',id});closeSheet();await loadFromSheets();toast('Drive deleted');}catch(e){alert('Delete failed: '+e.message);}}
 function confDelC(did,cid){const d=drives.find(x=>x.id===did);const c=(d?.contents||[]).find(x=>x.id===cid);if(!c)return;openSheet(`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:18px"><span style="font-size:20px">&#9888;&#65039;</span><div style="font-size:16px;font-weight:600;line-height:1.5">Delete item &ldquo;${esc(c.name)}&rdquo;?</div></div><div class="bpair"><button class="bghost" onclick="closeSheet()">Cancel</button><button class="bprim bw" onclick="delContent('${esc(did)}','${esc(cid)}')">Delete</button></div>`);}
 async function delContent(did,cid){const b=document.querySelector('.bw');if(b){b.disabled=true;b.textContent='Deleting\u2026';}try{await gsPost({action:'deleteContent',id:cid});closeSheet();await loadFromSheets();toast('Item deleted');}catch(e){alert('Delete failed: '+e.message);}}
+
+function confClearAll(driveId){
+  const d=drives.find(x=>x.id===driveId);if(!d)return;
+  const n=(d.contents||[]).filter(c=>!isRefItem(c)).length;
+  openSheet(`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:18px"><span style="font-size:22px">&#9888;&#65039;</span><div><div style="font-size:16px;font-weight:600;line-height:1.5;margin-bottom:6px">Clear all ${n} items from &ldquo;${esc(d.name)}&rdquo;?</div><div style="font-size:13px;color:var(--muted)">Reference screenshot will be kept. This cannot be undone.</div></div></div><div class="bpair"><button class="bghost" onclick="closeSheet()">Cancel</button><button class="bprim bw" onclick="clearAllItems('${esc(driveId)}')">Clear all</button></div>`);
+}
+async function clearAllItems(driveId){
+  const btn=document.querySelector('.bw');if(btn){btn.disabled=true;btn.textContent='Clearing…';}
+  try{
+    const d=drives.find(x=>x.id===driveId);if(!d)return;
+    const toDelete=(d.contents||[]).filter(c=>!isRefItem(c));
+    for(const c of toDelete){
+      await gsPost({action:'deleteContent',id:c.id});
+    }
+    closeSheet();await loadFromSheets(true);openDetail(driveId);
+    toast('All items cleared ✓');
+  }catch(e){alert('Clear failed: '+e.message);if(btn){btn.disabled=false;btn.textContent='Clear all';}}
+}
 
 // Sheet
 function openSheet(h){document.getElementById('sc').innerHTML=h;document.getElementById('ov').style.display='flex';document.body.style.overflow='hidden';}
